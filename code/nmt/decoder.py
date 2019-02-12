@@ -14,6 +14,7 @@ class Decoder(nn.Module):
 
     def __init__(self, vocab_size, context_projection=None):
         super(Decoder, self).__init__()
+        self.vocab_size = vocab_size
         self.act = nn.Tanh()
         self.hidden_size = mconfig.hidden_size_decoder
         self.rank = mconfig.rank_decoder

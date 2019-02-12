@@ -13,8 +13,10 @@ from configuration import TransformerConfig as tconfig
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, embedding_rank, attention_rank=None, ffward_rank=None):
+    def __init__(self, vocab_size, embedding_rank, attention_rank=None, ffward_rank=None, positionless=False):
         super().__init__()
+        self.positionless = positionless
+        self.vocab_size = vocab_size
         layer = DecoderLayer(
             tconfig.layer_dimension,
             MultiHeadedAttention(
@@ -38,17 +40,26 @@ class Decoder(nn.Module):
 
         self.layers = clones(layer, tconfig.num_layers)
         self.norm = LayerNorm(layer.size)
-        self.tgt_embed = nn.Sequential(
-            TrFactorizedEmbeddings(
-                vocab_size,
-                tconfig.layer_dimension,
-                embedding_rank
-            ),
-            PositionalEncoding(
-                tconfig.layer_dimension,
-                tconfig.dropout,
-            ),
-        )
+        if positionless:
+            self.tgt_embed = nn.Sequential(
+                TrFactorizedEmbeddings(
+                    vocab_size,
+                    tconfig.layer_dimension,
+                    embedding_rank
+                )
+            )
+        else:
+            self.tgt_embed = nn.Sequential(
+                TrFactorizedEmbeddings(
+                    vocab_size,
+                    tconfig.layer_dimension,
+                    embedding_rank
+                ),
+                PositionalEncoding(
+                    tconfig.layer_dimension,
+                    tconfig.dropout,
+                ),
+            )
         self.generator = Generator(
             tconfig.layer_dimension,
             vocab_size,

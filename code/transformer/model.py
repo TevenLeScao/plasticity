@@ -24,7 +24,7 @@ class TransformerModel(NMTModel):
     A standard Encoder-Decoder architecture. Base for this and many
     other models.
     """
-    def __init__(self, *args, embedding_rank=None, inner_rank=None, ffward_rank=None, **kwargs):
+    def __init__(self, *args, embedding_rank=None, inner_rank=None, ffward_rank=None, positionless=False, **kwargs):
         # Run super constructor from NMTModel, but don't run NMTModel.__init__
         super(NMTModel, self).__init__()
         self.vocab = pickle.load(open(paths.vocab, 'rb'))
@@ -37,8 +37,10 @@ class TransformerModel(NMTModel):
             ffward_rank = transformer_config.ffward_rank
         print(transformer_config.embedding_factorization, transformer_config.inner_factorization, transformer_config.ffward_factorization)
         print(embedding_rank, inner_rank, ffward_rank)
-        self.encoder = Encoder(len(self.vocab.src), embedding_rank, inner_rank, ffward_rank)
-        self.decoder = Decoder(len(self.vocab.tgt), embedding_rank, inner_rank, ffward_rank)
+
+        self.positionless = positionless
+        self.encoder = Encoder(len(self.vocab.src), embedding_rank, inner_rank, ffward_rank, positionless=positionless)
+        self.decoder = Decoder(len(self.vocab.tgt), embedding_rank, inner_rank, ffward_rank, positionless=positionless)
 
         self.gpu = False
         self.initialize()
@@ -108,7 +110,7 @@ class TransformerModel(NMTModel):
 
     def update_lr(self, *args, **kwargs):
         """
-        Overwrite update_lr needed by other models becuase Transformer is very
+        Overwrite update_lr needed by other models because Transformer is very
         sensitive to hyperparameters and manages its own lr decay
         """
         pass

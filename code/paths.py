@@ -44,21 +44,31 @@ data_aligned_folder = "data/bilingual/"
 data_subwords_folder = "data/subwords/"
 
 
-def get_data_path(set, mode):
+def get_data_path(chunk, mode, pos=False):
     prefix = data_aligned_folder
     if mode == "tgt":
-        suffix = ".de"
+        language_suffix = ".de"
     else:
         assert mode == "src"
-        suffix = ".en"
-    return prefix+set + ".de-en"+suffix
+        language_suffix = ".en"
+    if pos:
+        pos_suffix = ".pos"
+    else:
+        pos_suffix = ""
+    return prefix + chunk + ".de-en" + language_suffix + pos_suffix
 
 
-train_source = get_data_path("train", "src")
-train_target = get_data_path("train", "tgt")
-dev_source = get_data_path("valid", "src")
-dev_target = get_data_path("valid", "tgt")
-test_source = get_data_path("test", "src")
-test_target = get_data_path("test", "tgt")
+train_source = get_data_path("train", "src", pos=gconfig.pos)
+train_target = get_data_path("train", "tgt", pos=gconfig.pos)
+dev_source = get_data_path("valid", "src", pos=gconfig.pos)
+dev_target = get_data_path("valid", "tgt", pos=gconfig.pos)
+test_source = get_data_path("test", "src", pos=gconfig.pos)
+test_target = get_data_path("test", "tgt", pos=gconfig.pos)
 newstest_target = "newstest2014-deen-ref.de.sgm"
 newstest_source = "newstest2014-deen-src.en.sgm"
+
+
+def get_tf_idf_vector_path(chunk):
+    prefix = data_aligned_folder
+    return prefix + "tf_idf." + chunk + ".de-en.npy"
+

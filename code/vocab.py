@@ -96,8 +96,8 @@ class Vocab(object):
 if __name__ == '__main__':
     subwords.main()
 
-    sc = paths.get_data_path("train", "src")
-    tg = paths.get_data_path("train", "tgt")
+    sc = paths.train_source
+    tg = paths.train_target
     print('read in source sentences: %s' % sc)
     print('read in target sentences: %s' % tg)
 

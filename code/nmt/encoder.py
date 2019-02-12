@@ -13,7 +13,7 @@ mconfig = configuration.LSTMConfig()
 class Encoder(nn.Module):
     def __init__(self, vocab_size, context_projection=None, state_projection=None):
         super(Encoder, self).__init__()
-        print(vocab_size)
+        self.vocab_size = vocab_size
         self.hidden_size = mconfig.hidden_size_encoder
         self.embed_size = mconfig.embed_size
         self.rank = mconfig.rank_encoder

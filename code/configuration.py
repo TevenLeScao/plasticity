@@ -2,9 +2,10 @@ import torch
 
 
 class GeneralConfig:
+    pos = False
     printout = True
     sanity = False
-    load = False
+    load = True
     pretraining = False
     pretraining_encoder = False
     seed = 1997
@@ -12,12 +13,12 @@ class GeneralConfig:
     cuda = torch.cuda.is_available()
     valid_niter = 1000
     log_every = 100
-    mode = "prune"
+    mode = "normal"
     model = "transformer"
 
 
 class TrainConfig:
-    lr = 2
+    lr = 0.1
     weight_decay = 0.00001
     batch_size = 32
     # teacher_forcing = 1
@@ -37,11 +38,11 @@ class LSTMConfig:
     bidirectional_encoder = True
     residual = False
     hidden_size_encoder = 256
-    hidden_size_decoder = 512
+    hidden_size_decoder = 256
     factorization = False
     rank_encoder = 128 if factorization else None
     rank_decoder = 128 if factorization else None
-    embed_size = 256
+    embed_size = 32
     has_output_layer = True
     dropout_layers = 0.4
     dropout_lstm_states = 0.
@@ -62,8 +63,8 @@ class VocabConfig:
     max_len_corpus = 1000
     joint = False
 
-    subwords_source = True
-    subwords_target = True
+    subwords_source = False
+    subwords_target = False
     load_subwords = False
     subwords_model_type = "bpe"
     subwords_vocab_size = 8000

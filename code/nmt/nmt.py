@@ -115,6 +115,8 @@ def decode(load_from=None):
     else:
         model_load_path = paths.model
     model = NMTModel.load(model_load_path)
+    print(model.encoder.vocab_size)
+    print(model.decoder.vocab_size)
     if gconfig.cuda:
         model.to_gpu()
     model.eval()

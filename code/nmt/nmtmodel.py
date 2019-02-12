@@ -40,7 +40,6 @@ class NMTModel(nn.Module):
             self.parameters(), lr=tconfig.lr, weight_decay=tconfig.weight_decay)
         self.gpu = False
         self.initialize()
-        print(len(self.vocab.src))
         # initialize neural network layers...
 
         self.accumulate = max(1, tconfig.accumulate)

@@ -11,9 +11,10 @@ from transformer.layers import TrFactorizedEmbeddings as FactorizedEmbeddings
 class Encoder(nn.Module):
     "Core encoder is a stack of N layers"
 
-    def __init__(self, vocab_size, embedding_rank, inner_rank=None, ffward_rank=None):
+    def __init__(self, vocab_size, embedding_rank, inner_rank=None, ffward_rank=None, positionless=False):
         super().__init__()
-        self.vocab = vocab_size
+        self.vocab_size = vocab_size
+        self.positionless = positionless
         layer = EncoderLayer(
             tconfig.layer_dimension,
             MultiHeadedAttention(
@@ -32,17 +33,25 @@ class Encoder(nn.Module):
 
         self.layers = clones(layer, tconfig.num_layers)
         self.norm = LayerNorm(layer.size)
-        self.src_embed = nn.Sequential(
-            FactorizedEmbeddings(
-                vocab_size,
-                tconfig.layer_dimension,
-                embedding_rank
-            ),
-            PositionalEncoding(
-                tconfig.layer_dimension,
-                tconfig.dropout,
-            ),
-        )
+        if positionless:
+            self.src_embed = nn.Sequential(
+                FactorizedEmbeddings(
+                    vocab_size,
+                    tconfig.layer_dimension,
+                    embedding_rank)
+            )
+        else:
+            self.src_embed = nn.Sequential(
+                FactorizedEmbeddings(
+                    vocab_size,
+                    tconfig.layer_dimension,
+                    embedding_rank
+                ),
+                PositionalEncoding(
+                    tconfig.layer_dimension,
+                    tconfig.dropout,
+                ),
+            )
 
     def forward(self, sequences):
         padded_seq = pad_sequence(sequences).transpose(0, 1)
