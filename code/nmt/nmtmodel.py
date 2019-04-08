@@ -22,11 +22,11 @@ dconfig = configuration.DecodeConfig()
 class NMTModel(nn.Module):
 
     def forward(self, *args, **kwargs):
-        raise("No forward allowed directly on wrapper NMTModel")
+        raise ("No forward allowed directly on wrapper NMTModel")
 
     def __init__(self):
         super(NMTModel, self).__init__()
-        self.vocab = pickle.load(open(paths.vocab, 'rb'))
+        self.vocab = pickle.load(open(paths.get_vocab_path(pos=False), 'rb'))
         stproj = None if (mconfig.hidden_size_encoder * (2 if mconfig.bidirectional_encoder else 1)
                           == mconfig.hidden_size_decoder) else mconfig.hidden_size_decoder
 
@@ -148,7 +148,7 @@ class NMTModel(nn.Module):
         if self.gpu:
             tensor_sent = tensor_sent.cuda()
         src_encoding, decoder_init_state = self.encoder.encode_one_sent(tensor_sent)
-        #print(src_sent, np_sent, src_encoding.size())
+        # print(src_sent, np_sent, src_encoding.size())
         if dconfig.greedy_search:
             tgt_tensor, score = self.decoder.greedy_search(
                 src_encoding, decoder_init_state, max_step, replace=replace)
@@ -176,7 +176,7 @@ class NMTModel(nn.Module):
                 hypotheses.append(Hypothesis(tgt_sent, score))
         return hypotheses
 
-    def evaluate_ppl(self, dev_data, batch_size: int=32, encoder_only=False, decoder_only=False, **kwargs):
+    def evaluate_ppl(self, dev_data, batch_size: int = 32, encoder_only=False, decoder_only=False, **kwargs):
 
         cum_loss = 0.
         cum_tgt_words = 0.
@@ -186,7 +186,8 @@ class NMTModel(nn.Module):
         # e.g., `torch.no_grad()`
         if encoder_only:
             cum_src_words = 0.
-            for src_sents, tgt_sents in batch_iter(dev_data, batch_size):
+            for batch in batch_iter(dev_data, batch_size):
+                src_sents, tgt_sents = batch["src"], batch["tgt"]
                 loss = self.encode_to_loss(src_sents, update_params=False)
 
                 src_word_num_to_predict = sum(len(s[1:])
@@ -197,7 +198,9 @@ class NMTModel(nn.Module):
 
             return ppl
 
-        for src_sents, tgt_sents in batch_iter(dev_data, batch_size):
+        for batch in batch_iter(dev_data, batch_size, pos_supervision=False):
+
+            src_sents, tgt_sents = batch["src"], batch["tgt"]
 
             if decoder_only:
                 loss = self.decode_to_loss(tgt_sents, update_params=False)

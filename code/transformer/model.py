@@ -12,11 +12,13 @@ from utils import load_partial_state_dict, Hypothesis
 from nmt.nmt import NMTModel
 from transformer.encoder import Encoder
 from transformer.decoder import Decoder
+from transformer.pos_supervisor import PosSupervisor
 from transformer.optimizer import NoamOpt
 import paths
 from configuration import TransformerConfig as transformer_config
-from configuration import DecodeConfig as decoder_config
+from configuration import DecodeConfig as decode_config
 from configuration import TrainConfig as train_config
+from configuration import SupervisionConfig as supervision_config
 
 
 class TransformerModel(NMTModel):
@@ -24,23 +26,23 @@ class TransformerModel(NMTModel):
     A standard Encoder-Decoder architecture. Base for this and many
     other models.
     """
-    def __init__(self, *args, embedding_rank=None, inner_rank=None, ffward_rank=None, positionless=False, **kwargs):
+
+    def __init__(self, *args, embedding_rank=None, inner_rank=None, ffward_rank=None, pos_supervision=None, **kwargs):
         # Run super constructor from NMTModel, but don't run NMTModel.__init__
         super(NMTModel, self).__init__()
-        self.vocab = pickle.load(open(paths.vocab, 'rb'))
+        self.vocab = pickle.load(open(paths.get_vocab_path(pos=False), 'rb'))
+        self.pos_vocab = pickle.load(open(paths.get_vocab_path(pos=True), 'rb'))
 
-        if embedding_rank is None:
-            embedding_rank = transformer_config.embedding_rank
-        if inner_rank is None:
-            inner_rank = transformer_config.inner_rank
-        if ffward_rank is None:
-            ffward_rank = transformer_config.ffward_rank
-        print(transformer_config.embedding_factorization, transformer_config.inner_factorization, transformer_config.ffward_factorization)
+        print(transformer_config.embedding_factorization, transformer_config.inner_factorization,
+              transformer_config.ffward_factorization)
         print(embedding_rank, inner_rank, ffward_rank)
 
-        self.positionless = positionless
-        self.encoder = Encoder(len(self.vocab.src), embedding_rank, inner_rank, ffward_rank, positionless=positionless)
-        self.decoder = Decoder(len(self.vocab.tgt), embedding_rank, inner_rank, ffward_rank, positionless=positionless)
+        self.encoder = Encoder(len(self.vocab.src), embedding_rank, inner_rank, ffward_rank, pos_supervision)
+        self.decoder = Decoder(len(self.vocab.tgt), embedding_rank, inner_rank, ffward_rank, pos_supervision)
+        self.enc_pos_supervisor = PosSupervisor(len(self.pos_vocab.src), transformer_config.layer_dimension)
+        self.dec_pos_supervisor = PosSupervisor(len(self.pos_vocab.tgt), transformer_config.layer_dimension)
+
+        self.alpha = supervision_config.alpha
 
         self.gpu = False
         self.initialize()
@@ -74,14 +76,19 @@ class TransformerModel(NMTModel):
             ),
         )
 
-    def __call__(self, src, tgt, update_params=True):
+    def __call__(self, src, tgt, src_pos=None, tgt_pos=None, update_params=True):
         "Take in and process masked src and target sequences."
-        src_encoding, src_mask = self.encode(src)
-        loss, norm = self.decode(
+        src_encoding, src_mask, enc_intermediate = self.encode(src)
+        loss, norm, dec_intermediate = self.decode(
             src_encoding,
             src_mask,
             tgt,
         )
+
+        if self.training and src_pos is not None and tgt_pos is not None:
+            enc_pos_loss = self.enc_pos_supervisor(enc_intermediate, src_pos)
+            dec_pos_loss = self.dec_pos_supervisor(dec_intermediate, tgt_pos)
+            loss = loss + self.alpha * enc_pos_loss + self.alpha * dec_pos_loss
 
         if update_params:
             self.step(loss)
@@ -118,7 +125,10 @@ class TransformerModel(NMTModel):
     @staticmethod
     def load(model_path: str):
         dict_path = model_path + ".dict.pt"
-        model = TransformerModel()
+        model = TransformerModel(embedding_rank=transformer_config.embedding_rank,
+                                 inner_rank=transformer_config.inner_rank,
+                                 ffward_rank=transformer_config.ffward_rank,
+                                 pos_supervision=supervision_config.pos_supervision)
         print("Loading whole model")
         load_partial_state_dict(model, torch.load(dict_path))
         return model
@@ -139,7 +149,7 @@ class TransformerModel(NMTModel):
 
     def beam_search(self, src, max_step=100, replace=False, start_symbol=1):
 
-        if decoder_config.greedy_search:
+        if decode_config.greedy_search:
 
             batch_size = len(src)
             stop = 2
@@ -147,12 +157,12 @@ class TransformerModel(NMTModel):
             inferred = [None for _ in range(batch_size)]
             memory, src_mask = self.encode(src)
             pred_sents = torch.ones(batch_size, 1, dtype=torch.long).fill_(start_symbol)
-            scores = np.zeros((batch_size, ))
+            scores = np.zeros((batch_size,))
 
             if self.gpu:
                 pred_sents = pred_sents.cuda()
 
-            for i in range(1, max_step+1):
+            for i in range(1, max_step + 1):
                 out = self.decoder.get_word_scores(memory, src_mask, Variable(pred_sents))
 
                 next_scores, next_words = torch.max(out, dim=1)
@@ -180,10 +190,10 @@ class TransformerModel(NMTModel):
                 print(src)
 
             batch_size = len(src)
-            beam_size = decoder_config.beam_size
+            beam_size = decode_config.beam_size
             beam_batch = BeamBatch(batch_size, beam_size, memory, src_mask, self.gpu)
 
-            for i in range(1, max_step+1):
+            for i in range(1, max_step + 1):
                 sizes = beam_batch.get_sizes()
                 memory, src_mask = beam_batch.expand_memory_and_mask()
                 pred_sents = beam_batch.open_hyps_tensor()
@@ -191,13 +201,14 @@ class TransformerModel(NMTModel):
                 out = self.decoder.get_word_scores(memory, src_mask, Variable(pred_sents))
                 out = out.detach().cpu().numpy()
 
-                next_words = np.argpartition(-out, beam_size-1, axis=-1)[:, :beam_size]
+                next_words = np.argpartition(-out, beam_size - 1, axis=-1)[:, :beam_size]
                 next_words = torch.LongTensor(next_words).cuda()
                 next_words = next_words.view(sum(sizes) * beam_size, 1)
-                pred_sents = pred_sents.repeat(beam_size, 1).reshape(beam_size, sum(sizes), -1).transpose(1, 0).reshape(beam_size * sum(sizes), -1)
+                pred_sents = pred_sents.repeat(beam_size, 1).reshape(beam_size, sum(sizes), -1).transpose(1, 0).reshape(
+                    beam_size * sum(sizes), -1)
                 pred_sents = torch.cat([pred_sents, next_words], dim=1)
 
-                next_scores = -np.partition(-out, beam_size-1)[:, :beam_size].flatten()
+                next_scores = -np.partition(-out, beam_size - 1)[:, :beam_size].flatten()
                 old_scores = np.array(beam_batch.get_open_scores())
                 old_scores = np.repeat(old_scores, beam_size)
                 next_scores = score_update(old_scores, next_scores, i)
@@ -206,34 +217,8 @@ class TransformerModel(NMTModel):
                 if beam_batch.is_closed():
                     break
 
-            # print([2 in beam_batch.best_results()[i][0] for i in range(batch_size)])
-            # print([len(beam_batch.best_results()[i][0]) for i in range(batch_size)])
-            return [[convert_hypothesis(beam_batch.best_results()[i][0], self.vocab, beam_batch.best_results()[i][1])] for i in range(batch_size)]
-
-            # for i in range(1, max_step+1):
-            #     next_hypotheses = []
-            #     all_done = True
-            #     for (cur_sent, old_score, is_done) in hypotheses:
-            #         if is_done:
-            #             next_hypotheses.append((cur_sent, old_score, is_done))
-            #             continue
-            #         else:
-            #             all_done = False
-            #             # TODO: create batch tensor
-            #         out = self.decoder.get_word_scores(memory, src_mask, Variable(cur_sent))
-            #         candidates = np.argpartition(-out.detach().cpu().numpy(), beam_size)[0, :beam_size]
-            #         for idx in candidates:
-            #             next_hypotheses.append(
-            #                 (
-            #                     torch.cat([cur_sent, torch.Tensor([[idx]]).type(cur_sent.type())], dim=1),
-            #                     score_update(old_score, out[0, idx].item(), i),
-            #                     idx == stop,
-            #                 )
-            #             )
-            #     hypotheses = sorted(next_hypotheses, key=lambda hyp: -hyp[1])[:beam_size]
-            #     if all_done:
-            #         break
-            # pred_sents, scores, _ = hypotheses[0]
+            return [[convert_hypothesis(beam_batch.best_results()[i][0], self.vocab, beam_batch.best_results()[i][1])]
+                    for i in range(batch_size)]
 
 
 class Beam:
@@ -258,8 +243,9 @@ class Beam:
         beam_size = self.beam_size
         n_closed = len(self.closed_scores)
         all_scores = np.array(self.closed_scores + list(new_scores))
-        candidate_indices = np.argpartition(-all_scores, beam_size-1)[:beam_size]
-        candidates = [(self.closed_hyps[i] if i < n_closed else new_hyps[i - n_closed], all_scores[i]) for i in candidate_indices]
+        candidate_indices = np.argpartition(-all_scores, beam_size - 1)[:beam_size]
+        candidates = [(self.closed_hyps[i] if i < n_closed else new_hyps[i - n_closed], all_scores[i]) for i in
+                      candidate_indices]
 
         self.open_scores = []
         self.closed_scores = []
@@ -298,6 +284,7 @@ class Beam:
 
     def is_open(self):
         return len(self.open_hyps) != 0
+
 
 class BeamBatch:
 
@@ -363,7 +350,7 @@ def convert_hypothesis(pred_sent, vocab, score):
     tgt_sent = []
     for word_id in pred_sent[1:-1]:
         tgt_sent.append(vocab.tgt.id2word[word_id.item()])
-    if decoder_config.greedy_search:
+    if decode_config.greedy_search:
         score = (score - np.log(len(pred_sent)))
     return Hypothesis(tgt_sent, score)
 

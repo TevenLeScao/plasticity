@@ -5,12 +5,10 @@ from itertools import chain
 import pickle
 
 from utils import read_corpus
-
-import configuration
 import paths
 import subwords
 
-vconfig = configuration.VocabConfig()
+from configuration import VocabConfig as vconfig, GeneralConfig as gconfig, SupervisionConfig as sconfig
 
 
 class VocabEntry(object):
@@ -93,20 +91,26 @@ class Vocab(object):
         return 'Vocab(source %d words, target %d words)' % (len(self.src), len(self.tgt))
 
 
-if __name__ == '__main__':
+def create_vocab(pos=False):
     subwords.main()
 
-    sc = paths.train_source
-    tg = paths.train_target
+    sc = paths.get_data_path("train", "src", pos)
+    tg = paths.get_data_path("train", "tgt", pos)
     print('read in source sentences: %s' % sc)
     print('read in target sentences: %s' % tg)
 
-    src_sents = read_corpus(sc, source='src')
-    tgt_sents = read_corpus(tg, source='tgt')
+    src_sents = read_corpus(sc, source='src', subwords_switch=not pos)
+    tgt_sents = read_corpus(tg, source='tgt', subwords_switch=not pos)
 
     vocab = Vocab(src_sents, tgt_sents, vconfig.vocab_size, vconfig.freq_cutoff)
     print('generated vocabulary,  source %d words, target %d words' %
           (len(vocab.src), len(vocab.tgt)))
 
-    pickle.dump(vocab, open(paths.vocab, 'wb'))
-    print('vocabulary saved to %s' % paths.vocab)
+    pickle.dump(vocab, open(paths.get_vocab_path(pos), 'wb'))
+    print('vocabulary saved to %s' % paths.get_vocab_path(pos))
+
+
+if __name__ == '__main__':
+    create_vocab(pos=False)
+    if gconfig.mode == "parts_of_speech" or sconfig.pos_supervision is not None:
+        create_vocab(pos=True)

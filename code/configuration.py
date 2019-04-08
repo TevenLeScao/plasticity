@@ -2,10 +2,9 @@ import torch
 
 
 class GeneralConfig:
-    pos = False
     printout = True
     sanity = False
-    load = True
+    load = False
     pretraining = False
     pretraining_encoder = False
     seed = 1997
@@ -18,7 +17,7 @@ class GeneralConfig:
 
 
 class TrainConfig:
-    lr = 0.1
+    lr = 1
     weight_decay = 0.00001
     batch_size = 32
     # teacher_forcing = 1
@@ -54,7 +53,7 @@ class DecodeConfig:
     max_decoding_time_step = 150
     greedy_search = False
     replace = False
-    batch_size = 24
+    batch_size = 32
 
 
 class VocabConfig:
@@ -114,3 +113,9 @@ class TransformerConfig:
     inner_layer_dimension = 1024
     num_attention_heads = 8
     dropout = 0.1
+
+
+class SupervisionConfig:
+    bow_supervision = None
+    pos_supervision = 2
+    alpha = 0.01

@@ -1,4 +1,3 @@
-
 import math
 import pickle
 import sys
@@ -41,7 +40,8 @@ def compute_corpus_level_bleu_score(references: List[List[str]], hypotheses: Lis
     return bleu_score
 
 
-def train_model(model, train_data, dev_data, model_save_path, train_batch_size=None, valid_niter=None, log_every=None, max_epoch=None, lr=None, max_patience=None, max_num_trial=None, lr_decay=None):
+def train_model(model, train_data, dev_data, model_save_path, train_batch_size=None, valid_niter=None, log_every=None,
+                max_epoch=None, lr=None, max_patience=None, max_num_trial=None, lr_decay=None, pos_supervision=False):
     print_file = sys.stderr
     if gconfig.printout:
         print_file = sys.stdout
@@ -56,13 +56,18 @@ def train_model(model, train_data, dev_data, model_save_path, train_batch_size=N
     while True:
         epoch += 1
         model.train()
-        for src_sents, tgt_sents in batch_iter(train_data, batch_size=train_batch_size, shuffle=True):
+        for batch in batch_iter(train_data, batch_size=train_batch_size, shuffle=True,
+                                pos_supervision=pos_supervision):
+
+            if pos_supervision:
+                src_sents, tgt_sents, src_pos_sents, tgt_pos_sents = batch["src"], batch["tgt"], batch["src_pos"], \
+                                                                     batch["tgt_pos"]
+                loss = model(src_sents, tgt_sents, src_pos_sents, tgt_pos_sents)
+            else:
+                src_sents, tgt_sents = batch["src"], batch["tgt"]
+                loss = model(src_sents, tgt_sents)
             train_iter += 1
             batch_size = len(src_sents)
-
-            # (batch_size)
-
-            loss = model(src_sents, tgt_sents)
 
             report_loss += loss
             cum_loss += loss
@@ -74,16 +79,16 @@ def train_model(model, train_data, dev_data, model_save_path, train_batch_size=N
             cumulative_examples += batch_size
 
             if train_iter % log_every == 0:
-                log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f '\
-                    'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
-                                                                                       report_loss / report_examples,
-                                                                                       math.exp(
-                                                                                           report_loss / report_tgt_words),
-                                                                                       cumulative_examples,
-                                                                                       report_tgt_words /
-                                                                                       (time.time(
-                                                                                       ) - train_time),
-                                                                                       time.time() - begin_time)
+                log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f ' \
+                      'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
+                                                                                         report_loss / report_examples,
+                                                                                         math.exp(
+                                                                                             report_loss / report_tgt_words),
+                                                                                         cumulative_examples,
+                                                                                         report_tgt_words /
+                                                                                         (time.time(
+                                                                                         ) - train_time),
+                                                                                         time.time() - begin_time)
                 print(log, file=print_file)
 
                 train_time = time.time()
@@ -161,7 +166,8 @@ def train_model(model, train_data, dev_data, model_save_path, train_batch_size=N
             return model
 
 
-def train_decoder(model, train_data, dev_data, model_save_path, train_batch_size, valid_niter, log_every, max_epoch, lr, max_patience, max_num_trial, lr_decay):
+def train_decoder(model, train_data, dev_data, model_save_path, train_batch_size, valid_niter, log_every, max_epoch, lr,
+                  max_patience, max_num_trial, lr_decay, pos_supervision=False):
     print_file = sys.stderr
     if gconfig.printout:
         print_file = sys.stdout
@@ -175,7 +181,12 @@ def train_decoder(model, train_data, dev_data, model_save_path, train_batch_size
     while True:
         epoch += 1
         model.train()
-        for src_sents, tgt_sents in batch_iter(train_data, batch_size=train_batch_size, shuffle=True):
+        for batch in batch_iter(train_data, batch_size=train_batch_size, shuffle=True, pos_supervision=pos_supervision):
+            if pos_supervision:
+                src_sents, tgt_sents, src_pos_sents, tgt_pos_sents = batch["src"], batch["tgt"], batch["src_pos"], \
+                                                                     batch["tgt_pos"]
+            else:
+                src_sents, tgt_sents = batch["src"], batch["tgt"]
             train_iter += 1
             batch_size = len(src_sents)
 
@@ -193,16 +204,16 @@ def train_decoder(model, train_data, dev_data, model_save_path, train_batch_size
             cumulative_examples += batch_size
 
             if train_iter % log_every == 0:
-                log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f '\
-                    'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
-                                                                                       report_loss / report_examples,
-                                                                                       math.exp(
-                                                                                           report_loss / report_tgt_words),
-                                                                                       cumulative_examples,
-                                                                                       report_tgt_words /
-                                                                                       (time.time(
-                                                                                       ) - train_time),
-                                                                                       time.time() - begin_time)
+                log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f ' \
+                      'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
+                                                                                         report_loss / report_examples,
+                                                                                         math.exp(
+                                                                                             report_loss / report_tgt_words),
+                                                                                         cumulative_examples,
+                                                                                         report_tgt_words /
+                                                                                         (time.time(
+                                                                                         ) - train_time),
+                                                                                         time.time() - begin_time)
                 print(log, file=print_file)
 
                 train_time = time.time()
@@ -278,7 +289,8 @@ def train_decoder(model, train_data, dev_data, model_save_path, train_batch_size
             return
 
 
-def train_encoder(model, train_data, dev_data, model_save_path, train_batch_size, valid_niter, log_every, max_epoch, lr, max_patience, max_num_trial, lr_decay):
+def train_encoder(model, train_data, dev_data, model_save_path, train_batch_size, valid_niter, log_every, max_epoch, lr,
+                  max_patience, max_num_trial, lr_decay, pos_supervision=False):
     print_file = sys.stderr
     if gconfig.printout:
         print_file = sys.stdout
@@ -292,7 +304,12 @@ def train_encoder(model, train_data, dev_data, model_save_path, train_batch_size
     while True:
         epoch += 1
         model.train()
-        for src_sents, tgt_sents in batch_iter(train_data, batch_size=train_batch_size, shuffle=True):
+        for batch in batch_iter(train_data, batch_size=train_batch_size, shuffle=True, pos_supervision=pos_supervision):
+            if pos_supervision:
+                src_sents, tgt_sents, src_pos_sents, tgt_pos_sents = batch["src"], batch["tgt"], batch["src_pos"], \
+                                                                     batch["tgt_pos"]
+            else:
+                src_sents, tgt_sents = batch["src"], batch["tgt"]
             train_iter += 1
             batch_size = len(src_sents)
 
@@ -310,16 +327,16 @@ def train_encoder(model, train_data, dev_data, model_save_path, train_batch_size
             cumulative_examples += batch_size
 
             if train_iter % log_every == 0:
-                log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f '\
-                    'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
-                                                                                       report_loss / report_examples,
-                                                                                       math.exp(
-                                                                                           report_loss / report_src_words),
-                                                                                       cumulative_examples,
-                                                                                       report_src_words /
-                                                                                       (time.time(
-                                                                                       ) - train_time),
-                                                                                       time.time() - begin_time)
+                log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f ' \
+                      'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
+                                                                                         report_loss / report_examples,
+                                                                                         math.exp(
+                                                                                             report_loss / report_src_words),
+                                                                                         cumulative_examples,
+                                                                                         report_src_words /
+                                                                                         (time.time(
+                                                                                         ) - train_time),
+                                                                                         time.time() - begin_time)
                 print(log, file=print_file)
 
                 train_time = time.time()
@@ -414,7 +431,8 @@ def batch_beam_search(model, test_data_src, max_step=None, batch_size=64, replac
 
     hypotheses = []
     if batch_size != 1:
-        test_data_src = [test_data_src[i * batch_size:(i+1) * batch_size] for i in range((len(test_data_src) - 1) // batch_size + 1)]
+        test_data_src = [test_data_src[i * batch_size:(i + 1) * batch_size] for i in
+                         range((len(test_data_src) - 1) // batch_size + 1)]
     for i, src_sent in enumerate(tqdm(test_data_src, desc='Decoding', file=sys.stdout)):
         example_hyps = model.beam_search(
             src_sent, max_step=max_step, replace=replace)

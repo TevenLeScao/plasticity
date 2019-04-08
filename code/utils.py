@@ -19,25 +19,33 @@ LINEAR_BACKCOMP_PATTERN_2 = "(de|en)coder.layers.[0-9]+.feed_forward.w_[12].(wei
 
 def zip_data(*args):
 
-    src = args[0]
-    tgt = args[1]
-    assert len(src) == len(tgt)
-    return list(zip(src, tgt))
+    if len(args) == 2:
+        src = args[0]
+        tgt = args[1]
+        assert len(src) == len(tgt)
+        return list(zip(src, tgt))
+    if len(args) == 4:
+        src = args[0]
+        tgt = args[1]
+        src_pos = args[2]
+        tgt_pos = args[3]
+        assert len(src) == len(tgt) and len(src) == len(src_pos) and len(src) == len(tgt_pos)
+        return list(zip(src, tgt, src_pos, tgt_pos))
 
 
-def read_corpus(file_path, source='src'):
-    if vconfig.subwords_source and source == 'src':
+def read_corpus(file_path, source='src', subwords_switch=True):
+    if subwords_switch and vconfig.subwords_source and source == 'src':
         sub = subwords.SubwordReader("src")
-    elif vconfig.subwords_target and source == 'tgt':
+    elif subwords_switch and vconfig.subwords_target and source == 'tgt':
         sub = subwords.SubwordReader("tgt")
     print(file_path)
     test = "test" in file_path
     data = []
     counter = 0
     for line in open(file_path):
-        if vconfig.subwords_source and source == 'src':
+        if subwords_switch and vconfig.subwords_source and source == 'src':
             sent = sub.line_to_subwords(line)
-        elif vconfig.subwords_target and source == 'tgt':
+        elif subwords_switch and vconfig.subwords_target and source == 'tgt':
             sent = sub.line_to_subwords(line)
         else:
             sent = line.strip().split(' ')
@@ -65,7 +73,7 @@ def write_sents(sents, path):
             f.write(line + '\n')
 
 
-def batch_iter(data, batch_size, shuffle=False):
+def batch_iter(data, batch_size, shuffle=False, pos_supervision=False):
     """
     Given a list of examples, shuffle and slice them into mini-batches
     """
@@ -83,7 +91,12 @@ def batch_iter(data, batch_size, shuffle=False):
         src_sents = [e[0] for e in examples]
         tgt_sents = [e[1] for e in examples]
 
-        yield src_sents, tgt_sents
+        if pos_supervision:
+            src_pos_sents = [e[2] for e in examples]
+            tgt_pos_sents = [e[3] for e in examples]
+            yield {"src": src_sents, "tgt": tgt_sents, "src_pos": src_pos_sents, "tgt_pos": tgt_pos_sents}
+        else:
+            yield {"src": src_sents, "tgt": tgt_sents}
 
 
 def load_partial_state_dict(model, state_dict):

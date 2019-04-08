@@ -51,6 +51,21 @@ class DecoderLayer(nn.Module):
         return self.sublayer[2](x, self.feed_forward)
 
 
+class PositionlessDecoderLayer(nn.Module):
+
+    def __init__(self, size, src_attn, feed_forward, dropout):
+        super().__init__()
+        self.size = size
+        self.src_attn = src_attn
+        self.feed_forward = feed_forward
+        self.sublayer = clones(SublayerConnection(size, dropout), 2)
+
+    def forward(self, x, memory, src_mask):
+        m = memory
+        x = self.sublayer[0](x, lambda x: self.src_attn(x, m, m, src_mask))
+        return self.sublayer[1](x, self.feed_forward)
+
+
 class SublayerConnection(nn.Module):
     """
     A residual connection followed by a layer norm.
@@ -234,3 +249,13 @@ class Generator(nn.Module):
 
     def forward(self, x):
         return F.log_softmax(self.proj(x), dim=-1)
+
+
+class VectorGenerator(nn.Module):
+    "Define standard linear + softmax generation step."
+    def __init__(self, d_model, vocab_size, rank=None):
+        super().__init__()
+        self.proj = FactorizedLinear(d_model, vocab_size, rank=rank)
+
+    def forward(self, x):
+        return self.proj(x)

@@ -13,10 +13,10 @@ from configuration import TransformerConfig as tconfig
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, embedding_rank, attention_rank=None, ffward_rank=None, positionless=False):
+    def __init__(self, vocab_size, embedding_rank, attention_rank=None, ffward_rank=None, pos_supervision=None):
         super().__init__()
-        self.positionless = positionless
         self.vocab_size = vocab_size
+        self.pos_supervision = pos_supervision
         layer = DecoderLayer(
             tconfig.layer_dimension,
             MultiHeadedAttention(
@@ -40,26 +40,17 @@ class Decoder(nn.Module):
 
         self.layers = clones(layer, tconfig.num_layers)
         self.norm = LayerNorm(layer.size)
-        if positionless:
-            self.tgt_embed = nn.Sequential(
-                TrFactorizedEmbeddings(
-                    vocab_size,
-                    tconfig.layer_dimension,
-                    embedding_rank
-                )
-            )
-        else:
-            self.tgt_embed = nn.Sequential(
-                TrFactorizedEmbeddings(
-                    vocab_size,
-                    tconfig.layer_dimension,
-                    embedding_rank
-                ),
-                PositionalEncoding(
-                    tconfig.layer_dimension,
-                    tconfig.dropout,
-                ),
-            )
+        self.tgt_embed = nn.Sequential(
+            TrFactorizedEmbeddings(
+                vocab_size,
+                tconfig.layer_dimension,
+                embedding_rank
+            ),
+            PositionalEncoding(
+                tconfig.layer_dimension,
+                tconfig.dropout,
+            ),
+        )
         self.generator = Generator(
             tconfig.layer_dimension,
             vocab_size,
@@ -75,9 +66,12 @@ class Decoder(nn.Module):
         padded_tgt_loss = pad_sequence(tgt).transpose(0, 1)[:, 1:]
         tgt_mask = self.make_std_mask(padded_tgt_decode)
         embed = self.tgt_embed(padded_tgt_decode)
+        intermediate = None
 
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
             embed = layer(embed, src_enc, src_mask, tgt_mask)
+            if self.pos_supervision is not None and i == self.pos_supervision:
+                intermediate = embed
         out = self.generator(self.norm(embed))
 
         norm = (padded_tgt_loss != 0).data.sum().item()
@@ -86,7 +80,7 @@ class Decoder(nn.Module):
             loss = self.train_criterion(out.contiguous().view(-1, out.size(-1)),
                                   padded_tgt_loss.contiguous().view(-1)) / norm
 
-            return loss, norm
+            return loss, norm, intermediate
         # evaluate perplexity with cross-entropy loss
         else:
             lens = [len(tensor) for tensor in decode_tgt]
@@ -97,7 +91,7 @@ class Decoder(nn.Module):
 
             loss = self.eval_criterion(pred_sents, tgt_sents)
 
-            return loss, 1
+            return loss, 1, intermediate
 
     def make_std_mask(self, tgt, pad=0):
         "Create a mask to hide padding and future words."

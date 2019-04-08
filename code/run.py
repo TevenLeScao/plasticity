@@ -20,6 +20,7 @@ import torch
 import configuration
 from nmt import nmt
 from transformer import transformer
+from positionless import positionless
 from vocab import Vocab, VocabEntry
 import paths
 
@@ -28,29 +29,54 @@ cconfig = configuration.CompressionConfig()
 
 
 def lstm_script(args):
-    if args['train']:
-        load_from = paths.model if gconfig.load else None
-        nmt.train(load_from)
-        load_from = paths.model
-        nmt.decode(load_from)
-    elif args['decode']:
-        load_from = paths.model
-        nmt.decode(load_from)
-    else:
-        raise RuntimeError(f'invalid command')
+    raise NotImplementedError
+    # if args['train']:
+    #     load_from = paths.model if gconfig.load else None
+    #     nmt.train(load_from)
+    #     load_from = paths.model
+    #     nmt.decode(load_from)
+    # elif args['decode']:
+    #     load_from = paths.model
+    #     nmt.decode(load_from)
+    # else:
+    #     raise RuntimeError(f'invalid command')
 
 
 def transformer_script(args):
-    if args['train']:
-        load_from = paths.model if gconfig.load else None
-        transformer.train(load_from)
-        load_from = paths.model
-        transformer.decode(load_from)
-    elif args['decode']:
-        load_from = paths.model
-        transformer.decode(load_from)
-    else:
-        raise RuntimeError(f'invalid command')
+    if gconfig.mode == "normal":
+        if args['train']:
+            load_from = paths.model if gconfig.load else None
+            transformer.train(load_from)
+            load_from = paths.model
+            transformer.decode(load_from)
+        elif args['decode']:
+            load_from = paths.model
+            transformer.decode(load_from)
+        else:
+            raise RuntimeError(f'invalid command')
+    elif gconfig.mode == "parts_of_speech":
+        if args['train']:
+            load_from = paths.model if gconfig.load else None
+            transformer.train(load_from)
+            load_from = paths.model
+            transformer.decode(load_from)
+        elif args['decode']:
+            load_from = paths.model
+            transformer.decode(load_from)
+        else:
+            raise RuntimeError(f'invalid command')
+    elif gconfig.mode == "positionless":
+        if args['train']:
+            load_from = paths.model if gconfig.load else None
+            positionless.train(load_from)
+            load_from = paths.model
+            positionless.decode(load_from)
+        elif args['decode']:
+            load_from = paths.model
+            positionless.decode(load_from)
+        else:
+            raise RuntimeError(f'invalid command')
+
 
 def main():
     args = docopt(__doc__)
@@ -60,12 +86,10 @@ def main():
     seed = int(gconfig.seed)
     np.random.seed(seed * 13 // 7)
     torch.manual_seed(seed * 13 // 7)
-    if gconfig.mode == "normal":
-        print("Normal mode")
-        if gconfig.model == "transformer":
-            transformer_script(args)
-        if gconfig.model == "lstm":
-            lstm_script(args)
+    if gconfig.model == "transformer":
+        transformer_script(args)
+    if gconfig.model == "lstm":
+        lstm_script(args)
 
 
 if __name__ == '__main__':
