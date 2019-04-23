@@ -3,6 +3,7 @@ import pickle
 import sys
 import time
 import os
+import json
 
 import numpy as np
 import torch
@@ -52,10 +53,18 @@ def train_model(model, train_data, dev_data, model_save_path, train_batch_size=N
     cumulative_examples = report_examples = epoch = valid_num = 0
     hist_valid_scores = []
     train_time = begin_time = time.time()
+    try:
+        train_loss_history = json.load(open(paths.train_loss_history_file)) if gconfig.load else []
+        dev_loss_history = json.load(open(paths.dev_loss_history_file)) if gconfig.load else []
+    except:
+        train_loss_history, dev_loss_history = [], []
     print('begin Maximum Likelihood training')
     while True:
         epoch += 1
         model.train()
+        train_loss_history.append((time.time() - begin_time, report_loss))
+        json.dump(train_loss_history, open(paths.train_loss_history_file, 'w'), indent=2)
+        json.dump(dev_loss_history, open(paths.dev_loss_history_file, 'w'), indent=2)
         for batch in batch_iter(train_data, batch_size=train_batch_size, shuffle=True,
                                 pos_supervision=pos_supervision):
 
@@ -91,6 +100,7 @@ def train_model(model, train_data, dev_data, model_save_path, train_batch_size=N
                                                                                          time.time() - begin_time)
                 print(log, file=print_file)
 
+                train_loss_history.append((time.time() - begin_time, report_loss))
                 train_time = time.time()
                 report_loss = report_tgt_words = report_examples = 0.
 
@@ -117,6 +127,7 @@ def train_model(model, train_data, dev_data, model_save_path, train_batch_size=N
                 # dev batch size can be a bit larger
                 dev_ppl = model.evaluate_ppl(dev_data, batch_size=train_batch_size)
                 valid_metric = -dev_ppl
+                dev_loss_history.append((time.time() - begin_time, dev_ppl))
 
                 print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl), file=print_file)
 

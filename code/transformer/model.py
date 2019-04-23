@@ -39,8 +39,8 @@ class TransformerModel(NMTModel):
 
         self.encoder = Encoder(len(self.vocab.src), embedding_rank, inner_rank, ffward_rank, pos_supervision)
         self.decoder = Decoder(len(self.vocab.tgt), embedding_rank, inner_rank, ffward_rank, pos_supervision)
-        self.enc_pos_supervisor = PosSupervisor(len(self.pos_vocab.src), transformer_config.layer_dimension)
-        self.dec_pos_supervisor = PosSupervisor(len(self.pos_vocab.tgt), transformer_config.layer_dimension)
+        self.enc_pos_supervisor = PosSupervisor(len(self.pos_vocab.src), transformer_config.layer_dimension, "src")
+        self.dec_pos_supervisor = PosSupervisor(len(self.pos_vocab.tgt), transformer_config.layer_dimension, "tgt")
 
         self.alpha = supervision_config.alpha
 
@@ -86,9 +86,8 @@ class TransformerModel(NMTModel):
         )
 
         if self.training and src_pos is not None and tgt_pos is not None:
-            enc_pos_loss = self.enc_pos_supervisor(enc_intermediate, src_pos)
-            dec_pos_loss = self.dec_pos_supervisor(dec_intermediate, tgt_pos)
-            loss = loss + self.alpha * enc_pos_loss + self.alpha * dec_pos_loss
+            pos_loss = self.decode_to_pos(src_pos, tgt_pos, enc_intermediate, dec_intermediate)
+            loss = loss + pos_loss
 
         if update_params:
             self.step(loss)
@@ -108,6 +107,13 @@ class TransformerModel(NMTModel):
             tgt_enc,
         )
 
+    def decode_to_pos(self, src_pos, tgt_pos, enc_intermediate, dec_intermediate):
+        src_pos = self.prepare_sents(src_pos, "src", pos=True)
+        tgt_pos = self.prepare_sents(tgt_pos, "tgt", pos=True)
+        enc_pos_loss = self.enc_pos_supervisor(enc_intermediate, src_pos)
+        dec_pos_loss = self.dec_pos_supervisor(dec_intermediate, tgt_pos)
+        return self.alpha * enc_pos_loss + self.alpha * dec_pos_loss
+
     def initialize(self):
         # Initialize parameters with Glorot
         # TODO: Make sure this works correctly
@@ -121,6 +127,34 @@ class TransformerModel(NMTModel):
         sensitive to hyperparameters and manages its own lr decay
         """
         pass
+
+    def to_gpu(self):
+        if not self.gpu:
+            self.gpu = True
+            self.encoder = self.encoder.cuda()
+            self.decoder = self.decoder.cuda()
+            self.enc_pos_supervisor = self.enc_pos_supervisor.cuda()
+            self.dec_pos_supervisor = self.dec_pos_supervisor.cuda()
+
+    def to_cpu(self):
+        if self.gpu:
+            self.gpu = False
+            self.encoder = self.encoder.cpu()
+            self.decoder = self.decoder.cpu()
+            self.enc_pos_supervisor = self.enc_pos_supervisor.cpu()
+            self.dec_pos_supervisor = self.dec_pos_supervisor.cpu()
+
+    def train(self):
+        self.encoder = self.encoder.train()
+        self.decoder = self.decoder.train()
+        self.enc_pos_supervisor = self.enc_pos_supervisor.train()
+        self.dec_pos_supervisor = self.dec_pos_supervisor.train()
+
+    def eval(self):
+        self.encoder = self.encoder.eval()
+        self.decoder = self.decoder.eval()
+        self.enc_pos_supervisor = self.enc_pos_supervisor.eval()
+        self.dec_pos_supervisor = self.dec_pos_supervisor.eval()
 
     @staticmethod
     def load(model_path: str):
@@ -185,7 +219,7 @@ class TransformerModel(NMTModel):
         else:  # beam search
 
             try:
-                memory, src_mask = self.encode(src)
+                memory, src_mask, intermediate = self.encode(src)
             except IndexError:
                 print(src)
 

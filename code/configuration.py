@@ -19,7 +19,7 @@ class GeneralConfig:
 class TrainConfig:
     lr = 1
     weight_decay = 0.00001
-    batch_size = 32
+    batch_size = 16
     # teacher_forcing = 1
     clip_grad = 5.0
     lr_decay = 0.2
@@ -49,11 +49,11 @@ class LSTMConfig:
 
 
 class DecodeConfig:
-    beam_size = 10
-    max_decoding_time_step = 150
+    beam_size = 5
+    max_decoding_time_step = 50
     greedy_search = False
     replace = False
-    batch_size = 32
+    batch_size = 16
 
 
 class VocabConfig:
@@ -102,20 +102,21 @@ class CompressionConfig:
 
 
 class TransformerConfig:
+    tied = True
     embedding_factorization = False
     inner_factorization = False
     ffward_factorization = False
     embedding_rank = 256 if embedding_factorization else None
     inner_rank = 256 if inner_factorization else None
     ffward_rank = 256 if ffward_factorization else None
-    num_layers = 3
+    num_layers = 4
     layer_dimension = 512
-    inner_layer_dimension = 1024
+    inner_layer_dimension = 512
     num_attention_heads = 8
     dropout = 0.1
 
 
 class SupervisionConfig:
     bow_supervision = None
-    pos_supervision = 2
-    alpha = 0.01
+    pos_supervision = None
+    alpha = 1

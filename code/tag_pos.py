@@ -20,8 +20,8 @@ if __name__ == '__main__':
 
     for chunk in ["train", "test", "valid"]:
 
-        sc = paths.get_data_path(chunk, "src", pos=False)
-        tg = paths.get_data_path(chunk, "tgt", pos=False)
+        sc = paths.get_data_path(chunk, "src", pos=False, token=False)
+        tg = paths.get_data_path(chunk, "tgt", pos=False, token=False)
         print('read in source sentences: %s' % sc)
         print('read in target sentences: %s' % tg)
 
@@ -29,6 +29,8 @@ if __name__ == '__main__':
         src_sents = read_corpus(sc, source='src')
         tgt_sents = read_corpus(tg, source='src')
 
+        src_tokenized = []
+        tgt_tokenized = []
         src_tagged = []
         tgt_tagged = []
 
@@ -37,20 +39,28 @@ if __name__ == '__main__':
 
         for sentence in src_sents:
             doc = nlp_en(preprocess_sentence(sentence))
+            tokenized_sentence = [token.text for token in doc]
+            src_tokenized.append(tokenized_sentence)
             tagged_sentence = [token.tag_ for token in doc]
             src_tagged.append(tagged_sentence)
+
+        out_tokenized_sc = paths.get_data_path(chunk, "src", pos=False, token=True)
+        write_sents(src_tokenized, out_tokenized_sc)
+        out_tagged_sc = paths.get_data_path(chunk, "src", pos=True, token=False)
+        write_sents(src_tagged, out_tagged_sc)
 
         print("parsed English")
 
         for sentence in tgt_sents:
             doc = nlp_de(preprocess_sentence(sentence))
+            tokenized_sentence = [token.text for token in doc]
+            tgt_tokenized.append(tokenized_sentence)
             tagged_sentence = [token.tag_ for token in doc]
             tgt_tagged.append(tagged_sentence)
 
         print("parsed German")
 
-        out_sc = paths.get_data_path(chunk, "src", pos=True)
-        out_tg = paths.get_data_path(chunk, "tgt", pos=True)
-
-        write_sents(src_tagged, out_sc)
-        write_sents(tgt_tagged, out_tg)
+        out_tokenized_tg = paths.get_data_path(chunk, "tgt", pos=False, token=True)
+        write_sents(tgt_tokenized, out_tokenized_tg)
+        out_tagged_tg = paths.get_data_path(chunk, "tgt", pos=True, token=False)
+        write_sents(tgt_tagged, out_tagged_tg)

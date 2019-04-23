@@ -96,11 +96,17 @@ class NMTModel(nn.Module):
 
         return src_encodings, decoder_init_state
 
-    def prepare_sents(self, src_sents: List[List[str]], vocab):
+    def prepare_sents(self, src_sents: List[List[str]], vocab, pos=False):
         if vocab == 'src':
-            rel_vocab = self.vocab.src
+            if pos:
+                rel_vocab = self.pos_vocab.src
+            else:
+                rel_vocab = self.vocab.src
         elif vocab == 'tgt':
-            rel_vocab = self.vocab.tgt
+            if pos:
+                rel_vocab = self.pos_vocab.tgt
+            else:
+                rel_vocab = self.vocab.tgt
         else:
             raise ValueError('Error! Invalid vocabulary')
 

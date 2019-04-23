@@ -42,6 +42,9 @@ decode_output = results_folder+"decode.en"+decode_output_suffix
 data_aligned_folder = "data/bilingual/"
 data_subwords_folder = "data/subwords/"
 
+train_loss_history_file = results_folder + "train_loss_history.json"
+dev_loss_history_file = results_folder + "dev_ppl_history.json"
+
 
 def get_vocab_path(pos=False):
     vocab = vocab_folder+"vocab" + (".subsrc" if vconfig.subwords_source else ".words") + \
@@ -49,7 +52,7 @@ def get_vocab_path(pos=False):
     return vocab
 
 
-def get_data_path(chunk, mode, pos=False):
+def get_data_path(chunk, mode, pos=False, token=False):
     prefix = data_aligned_folder
     if mode == "tgt":
         language_suffix = ".de"
@@ -58,6 +61,8 @@ def get_data_path(chunk, mode, pos=False):
         language_suffix = ".en"
     if pos:
         pos_suffix = ".pos"
+    elif token:
+        pos_suffix = ".token"
     else:
         pos_suffix = ""
     return prefix + chunk + ".de-en" + language_suffix + pos_suffix

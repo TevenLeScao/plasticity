@@ -15,6 +15,7 @@ from configuration import TransformerConfig as tconfig
 class Decoder(nn.Module):
     def __init__(self, vocab_size, embedding_rank, attention_rank=None, ffward_rank=None, pos_supervision=None):
         super().__init__()
+        self.tied = tconfig.tied
         self.vocab_size = vocab_size
         self.pos_supervision = pos_supervision
         layer = DecoderLayer(
@@ -51,11 +52,8 @@ class Decoder(nn.Module):
                 tconfig.dropout,
             ),
         )
-        self.generator = Generator(
-            tconfig.layer_dimension,
-            vocab_size,
-            rank=embedding_rank
-        )
+        if not self.tied:
+            self.output_layer = TrFactorizedEmbeddings(vocab_size, tconfig.layer_dimension, embedding_rank)
         self.train_criterion = LabelSmoothing(vocab_size, padding_idx=0, smoothing=0.1)
         # self.train_criterion = ONMTLabelSmoothing(vocab_size, padding_idx=0, smoothing=0.1)
         self.eval_criterion = nn.CrossEntropyLoss(reduction='sum')
@@ -77,6 +75,8 @@ class Decoder(nn.Module):
         norm = (padded_tgt_loss != 0).data.sum().item()
 
         if self.training:
+            # print(out.contiguous().view(-1, out.size(-1)))
+            # print(padded_tgt_loss.contiguous().view(-1))
             loss = self.train_criterion(out.contiguous().view(-1, out.size(-1)),
                                   padded_tgt_loss.contiguous().view(-1)) / norm
 
@@ -92,6 +92,13 @@ class Decoder(nn.Module):
             loss = self.eval_criterion(pred_sents, tgt_sents)
 
             return loss, 1, intermediate
+
+    def generator(self, x):
+        if self.tied:
+            embedding = self.tgt_embed[0]
+            return F.log_softmax(embedding.reverse_embeddings(x), dim=-1)
+        else:
+            return F.log_softmax(self.output_layer.reverse_embeddings(x), dim=-1)
 
     def make_std_mask(self, tgt, pad=0):
         "Create a mask to hide padding and future words."
@@ -113,4 +120,4 @@ class Decoder(nn.Module):
 
         for layer in self.layers:
             embed = layer(embed, src_enc, src_mask, tgt_mask)
-        return self.generator(self.norm(embed)[:, -1])
+        return self.generator(self.norm(embed)[:, -1:]).squeeze(1)

@@ -203,7 +203,7 @@ class TrFactorizedEmbeddings(FactorizedEmbeddings):
         else:
             proj = F.linear(hidden, self.embeddings.weight, bias=self.output_bias)
 
-        return proj / math.sqrt(self.embedding_dim)
+        return proj
 
 
 class FactorizedLinear(nn.Module):
@@ -219,7 +219,7 @@ class FactorizedLinear(nn.Module):
             self.linear = nn.Linear(in_size, out_size)
         else:
             self.factorized = True
-            self.linear = nn.Sequential(nn.Linear(in_size, rank), nn.Linear(rank, out_size))
+            self.linear = nn.Sequential(nn.Linear(in_size, rank, bias=False), nn.Linear(rank, out_size))
 
     def forward(self, input):
 

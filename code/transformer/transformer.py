@@ -37,6 +37,15 @@ def train(load_from=None, save_to=None):
         train_data_src_pos = read_corpus(paths.get_data_path("train", "src", pos=True), source="src", subwords_switch=False)
         train_data_tgt_pos = read_corpus(paths.get_data_path("train", "tgt", pos=True), source="tgt", subwords_switch=False)
         train_data = zip_data(train_data_src, train_data_tgt, train_data_src_pos, train_data_tgt_pos)
+        problems = 0
+        for i, (src, tgt, src_pos, tgt_pos) in enumerate(train_data):
+            if len(src) != len(src_pos):
+                if ("&" not in "".join(src) and "-" not in "".join(src) and "cannot" not in "".join(src) and "gonna" not in "".join(src) and "gotta" not in "".join(src)):
+                    print(len(src), len(src_pos))
+                    print(src)
+                    print(src_pos)
+                    problems += 1
+        print(problems)
     else:
         train_data = zip_data(train_data_src, train_data_tgt)
 
@@ -92,7 +101,7 @@ def train(load_from=None, save_to=None):
 
     model = routine.train_model(model, train_data, dev_data, model_save_path,
                                 train_batch_size, valid_niter, log_every, max_epoch, lr, max_patience, max_num_trial,
-                                lr_decay)
+                                lr_decay, pos_supervision=supervision_config.pos_supervision is not None)
     model.to_cpu()
 
 
